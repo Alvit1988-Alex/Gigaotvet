@@ -35,6 +35,7 @@ class DialogListResponse(BaseModel):
     total: int
     page: int
     per_page: int
+    has_next: bool  # <-- исправлено, теперь здесь есть поле has_next
 
 
 class DialogAssignRequest(BaseModel):
