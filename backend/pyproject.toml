@@ -13,7 +13,8 @@ dependencies = [
     "pydantic-settings",
     "python-dotenv",
     "passlib[bcrypt]",
-    "python-jose[cryptography]"
+    "python-jose[cryptography]",
+    "httpx",
 ]
 
 [tool.setuptools]
