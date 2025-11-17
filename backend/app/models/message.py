@@ -22,6 +22,8 @@ class Message(Base):
     sender_name = Column(String(255), nullable=True)
 
     content = Column(Text, nullable=False)
+    attachments = Column(Text, nullable=True)
+    message_type = Column(String(32), default="text", nullable=False)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

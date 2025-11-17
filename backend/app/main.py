@@ -1,8 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.config import settings
 from app.api.v1.router import api_router
+from app.bot.router import router as bot_router
+from app.core.config import settings
+from app.middleware.admin_context import AdminContextMiddleware
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -18,6 +20,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(AdminContextMiddleware)
 
 @app.get("/health", tags=["system"])
 async def health_check() -> dict:
@@ -25,6 +28,7 @@ async def health_check() -> dict:
     return {"status": "ok"}
 
 app.include_router(api_router, prefix="/api")
+app.include_router(bot_router)
 
 if __name__ == "__main__":
     import uvicorn
