@@ -14,5 +14,8 @@ class PendingLogin(Base):
 
     is_confirmed = Column(Boolean, default=False)
 
+    ip_address = Column(String(64), nullable=True)
+    user_agent = Column(String(512), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     confirmed_at = Column(DateTime(timezone=True), nullable=True)

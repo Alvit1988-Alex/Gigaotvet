@@ -26,6 +26,7 @@ class Settings(BaseSettings):
 
     TELEGRAM_BOT_TOKEN: str | None = None
     TELEGRAM_WEBHOOK_SECRET: str | None = None
+    TELEGRAM_BOT_USERNAME: str | None = None
 
     GIGACHAT_CLIENT_ID: str | None = None
     GIGACHAT_CLIENT_SECRET: str | None = None
