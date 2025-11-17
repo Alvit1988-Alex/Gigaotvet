@@ -1,0 +1,1 @@
+"""Gigaotvet backend application package."""
