@@ -4,6 +4,8 @@ __pycache__/
 venv/
 .env
 .env.*
+!backend/.env.docker
+!frontend/.env.docker
 .mypy_cache/
 .pytest_cache/
 .vscode/
