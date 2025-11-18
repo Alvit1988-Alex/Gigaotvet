@@ -741,6 +741,46 @@ textarea {
   gap: 16px;
 }
 
+.connection-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 12px;
+  background: rgba(15, 23, 42, 0.6);
+}
+
+[data-theme="light"] .connection-indicator {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.connection-indicator .indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.connection-indicator.connection-good {
+  color: var(--success);
+}
+
+.connection-indicator.connection-progress {
+  color: var(--warning);
+}
+
+.connection-indicator.connection-bad {
+  color: var(--danger);
+}
+
+.connection-indicator.connection-idle {
+  color: var(--text-muted);
+}
+
 .role-switcher {
   display: inline-flex;
   padding: 4px;

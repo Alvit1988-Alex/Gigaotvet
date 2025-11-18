@@ -187,7 +187,7 @@ function getStoredNotificationPermission(): NotificationPermission {
 
 export default function DialogsView() {
   const { user } = useAuth();
-  const wsClient = useWSClient();
+  const { subscribe } = useWSClient();
   const [statusFilter, setStatusFilter] = useState<DialogStatus | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [assignedOnly, setAssignedOnly] = useState(false);
@@ -561,18 +561,15 @@ export default function DialogsView() {
   }, []);
 
   useEffect(() => {
-    if (!wsClient) {
-      return;
-    }
-    const unsubscribeMessages = wsClient.subscribe("events/messages", handleMessageEvent);
-    const unsubscribeDialogs = wsClient.subscribe("events/dialogs", handleDialogEvent);
-    const unsubscribeOperators = wsClient.subscribe("events/operators", handleOperatorEvent);
+    const unsubscribeMessages = subscribe("events/messages", handleMessageEvent);
+    const unsubscribeDialogs = subscribe("events/dialogs", handleDialogEvent);
+    const unsubscribeOperators = subscribe("events/operators", handleOperatorEvent);
     return () => {
       unsubscribeMessages();
       unsubscribeDialogs();
       unsubscribeOperators();
     };
-  }, [handleDialogEvent, handleMessageEvent, handleOperatorEvent, wsClient]);
+  }, [handleDialogEvent, handleMessageEvent, handleOperatorEvent, subscribe]);
 
   const handleStatusChange = (nextStatus: DialogStatus | "all") => {
     setStatusFilter(nextStatus);

@@ -30,7 +30,7 @@ const CHANNEL_LABEL: Record<NotificationChannel, string> = {
 };
 
 export default function SettingsView() {
-  const wsClient = useWSClient();
+  const { subscribe } = useWSClient();
   const [notifications, setNotifications] = useState<Record<NotificationChannel, boolean>>({
     email: true,
     telegram: true,
@@ -91,11 +91,11 @@ export default function SettingsView() {
   );
 
   useEffect(() => {
-    const unsubscribe = wsClient.subscribe("events/system", handleSystemEvent);
+    const unsubscribe = subscribe("events/system", handleSystemEvent);
     return () => {
       unsubscribe();
     };
-  }, [handleSystemEvent, wsClient]);
+  }, [handleSystemEvent, subscribe]);
 
   const formatFileSize = (sizeBytes: number) => {
     const formatter = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 });
