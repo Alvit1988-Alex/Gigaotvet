@@ -47,3 +47,21 @@ docker run -p 3000:3000 -e PORT=3000 gigaotvet-frontend
 | `PORT` | переменная окружения в рантайме контейнера | Какой порт будет слушать `next start`. По умолчанию `3000`, этот же порт публикуется через `EXPOSE` и используется в docker-compose/nginx. |
 
 > ⚠️ Все переменные, начинающиеся на `NEXT_PUBLIC_`, внедряются в статический бандл во время `npm run build`. Поэтому для production-образа их нужно передавать на этапе `docker build`.
+
+## Systemd-юниты для продакшен-развертывания
+
+В каталоге `deploy/systemd/` лежат готовые unit-файлы `giga_backend.service`, `giga_frontend.service` и `giga_bot.service`.
+
+- Backend запускает `uvicorn app.main:app --host 0.0.0.0 --port 8000` и читает переменные из `/opt/gigaotvet/backend/.env`.
+- Frontend ожидает собранный Next.js-проект и выполняет `next start -p 3000`, подхватывая настройки из `/opt/gigaotvet/frontend/.env.production`.
+- Bot-сервис предназначен для запуска скрипта Telegram-бота (`python -m app.bot`) рядом с backend-кодом и также использует `/opt/gigaotvet/backend/.env`.
+
+Перед установкой отредактируйте `WorkingDirectory` и `EnvironmentFile`, чтобы они указывали на реальные пути деплоя (например, `/opt/gigaotvet`). Затем установите юниты:
+
+```bash
+sudo cp deploy/systemd/giga_*.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now giga_backend.service giga_frontend.service giga_bot.service
+```
+
+Такой порядок копирования → `daemon-reload` → `enable --now` гарантирует корректную регистрацию unit-файлов и автоматический старт сервисов при перезагрузке.
