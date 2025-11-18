@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import DialogsView from "../views/DialogsView";
 import SearchView from "../views/SearchView";
 import SettingsView from "../views/SettingsView";
 import InstructionsView from "../views/InstructionsView";
 import StatsView from "../views/StatsView";
+import { useAuth } from "../../../contexts/AuthContext";
 
 type Role = "admin" | "superadmin";
 type ViewId = "dialogs" | "search" | "settings" | "instructions" | "stats";
@@ -62,9 +63,14 @@ const ROLE_LABEL: Record<Role, string> = {
 };
 
 export default function AppShell() {
+  const { logout } = useAuth();
   const [role, setRole] = useState<Role>("admin");
   const [activeView, setActiveView] = useState<ViewId>("dialogs");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  const handleLogout = useCallback(() => {
+    void logout();
+  }, [logout]);
 
   const allowedViews = useMemo(
     () => VIEW_CONFIG.filter((view) => view.roles.includes(role)),
@@ -109,7 +115,7 @@ export default function AppShell() {
               <div className="profile-name">Софья Лебедева</div>
               <div className="profile-role">{ROLE_LABEL[role]}</div>
             </div>
-            <button className="ghost-button" type="button">
+            <button className="ghost-button" type="button" onClick={handleLogout}>
               Выйти
             </button>
           </div>

@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { getCurrentUser, logout as logoutRequest } from "../services/authApi";
+import { fetchMe, logout as logoutRequest } from "../services/authApi";
 import { UnauthorizedError } from "../services/apiClient";
 import type { Admin } from "../types/auth";
 
@@ -36,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await getCurrentUser();
+      const response = await fetchMe();
       setUserState(response.admin);
     } catch (error) {
       if (error instanceof UnauthorizedError) {
