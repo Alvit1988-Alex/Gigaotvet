@@ -5,8 +5,11 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.bot.utils import send_telegram_message
+from app.core.config import settings
 from app.models import Dialog, DialogStatus, Message, MessageRole
+from app.services.ai_responder import AiReplyResult, FALLBACK_TEXT, generate_ai_reply
 from app.services.audit import log_action
+from app.services.rag_service import RAGService
 
 OPERATOR_KEYWORDS = [
     "оператор",
@@ -80,10 +83,80 @@ async def handle_update(update: dict, db: Session) -> None:
     dialog.last_message_at = now
     dialog.unread_messages_count = (dialog.unread_messages_count or 0) + 1
 
+    ai_result: AiReplyResult | None = None
+    ai_during_wait = False
+
     if _needs_operator(content):
         dialog.status = DialogStatus.WAIT_OPERATOR
-    elif dialog.status == DialogStatus.WAIT_USER:
-        dialog.status = DialogStatus.AUTO
+        ai_result = AiReplyResult(
+            text=FALLBACK_TEXT,
+            is_fallback=True,
+            used_rag=False,
+            matches=[],
+            max_score=0.0,
+        )
+    else:
+        if dialog.status == DialogStatus.WAIT_OPERATOR:
+            rag_service = RAGService(db)
+            precomputed = await rag_service.get_relevant_chunks(content)
+            max_score = precomputed[0].score if precomputed else 0.0
+            if max_score >= settings.RAG_OPERATOR_HIGH_CONFIDENCE:
+                ai_result = await generate_ai_reply(
+                    db,
+                    dialog=dialog,
+                    user_text=content,
+                    precomputed_matches=precomputed,
+                )
+                ai_during_wait = not ai_result.is_fallback
+        else:
+            ai_result = await generate_ai_reply(db, dialog=dialog, user_text=content)
+
+    if ai_result:
+        metadata = None
+        if ai_result.matches:
+            metadata = {
+                "chunk_ids": [match.chunk.id for match in ai_result.matches],
+                "relevance": [match.score for match in ai_result.matches],
+            }
+        ai_message = Message(
+            dialog_id=dialog.id,
+            role=MessageRole.AI,
+            sender_name="AI",
+            content=ai_result.text,
+            metadata_json=metadata,
+            is_fallback=ai_result.is_fallback,
+            used_rag=ai_result.used_rag,
+            ai_reply_during_operator_wait=ai_during_wait,
+        )
+        db.add(ai_message)
+        dialog.last_message_at = now
+
+        if ai_result.is_fallback:
+            dialog.status = DialogStatus.WAIT_OPERATOR
+        else:
+            if previous_status == DialogStatus.WAIT_OPERATOR:
+                dialog.status = DialogStatus.WAIT_OPERATOR
+            else:
+                dialog.status = DialogStatus.AUTO
+                dialog.unread_messages_count = 0
+
+        db.flush()
+
+        log_action(
+            db,
+            admin_id=None,
+            action="ai_message_sent",
+            params={
+                "dialog_id": dialog.id,
+                "message_id": ai_message.id,
+                "is_fallback": ai_result.is_fallback,
+            },
+        )
+
+        try:
+            await send_telegram_message(telegram_user_id, ai_result.text)
+        except Exception:
+            pass
 
     if dialog.status != previous_status:
         log_action(
@@ -94,8 +167,3 @@ async def handle_update(update: dict, db: Session) -> None:
         )
 
     db.commit()
-
-    try:
-        await send_telegram_message(telegram_user_id, "Автоответ: спасибо за сообщение")
-    except Exception:
-        pass
