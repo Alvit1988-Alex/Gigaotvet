@@ -1,0 +1,15 @@
+[Unit]
+Description=Gigaotvet Telegram bot worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/gigaotvet/backend
+EnvironmentFile=/opt/gigaotvet/backend/.env
+ExecStart=/usr/bin/env python -m app.bot
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
