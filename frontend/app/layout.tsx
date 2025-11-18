@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import "./globals.css";
+import "../styles/globals.css";
+import { ThemeProvider } from "../contexts/ThemeContext";
 
 export const metadata = {
   title: "Gigaotvet Panel",
@@ -9,7 +10,9 @@ export const metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ru">
-      <body>{children}</body>
+      <body>
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   );
 }
