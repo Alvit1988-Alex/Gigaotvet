@@ -1,0 +1,87 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: gigaotvet-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gigaotvet
+      POSTGRES_USER: gigaotvet
+      POSTGRES_PASSWORD: change_me
+    ports:
+      - "5433:5432"
+    volumes:
+      - gigaotvet-postgres-data:/var/lib/postgresql/data
+    networks:
+      - gigaotvet-net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gigaotvet-backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env.docker
+    depends_on:
+      postgres:
+        condition: service_started
+    ports:
+      - "8000:8000"
+    networks:
+      - gigaotvet-net
+
+  bot:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gigaotvet-bot
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env.docker
+    depends_on:
+      - backend
+    environment:
+      BACKEND_API_BASE_URL: http://backend:8000
+    command: ["python", "-m", "app.main"]
+    networks:
+      - gigaotvet-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://nginx
+    container_name: gigaotvet-frontend
+    restart: unless-stopped
+    env_file:
+      - ./frontend/.env.docker
+    depends_on:
+      - backend
+      - nginx
+    ports:
+      - "3000:3000"
+    networks:
+      - gigaotvet-net
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: gigaotvet-nginx
+    restart: unless-stopped
+    depends_on:
+      - backend
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+    networks:
+      - gigaotvet-net
+
+volumes:
+  gigaotvet-postgres-data:
+
+networks:
+  gigaotvet-net:
+    driver: bridge
