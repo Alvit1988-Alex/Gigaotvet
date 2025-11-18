@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import "../styles/globals.css";
 import { ThemeProvider } from "../contexts/ThemeContext";
+import Providers from "./providers";
+import AppRouterGuard from "../components/AppRouterGuard";
 
 export const metadata = {
   title: "Gigaotvet Panel",
@@ -11,7 +13,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ru">
       <body className="app-body-root">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <Providers>
+            <AppRouterGuard>{children}</AppRouterGuard>
+          </Providers>
+        </ThemeProvider>
       </body>
     </html>
   );

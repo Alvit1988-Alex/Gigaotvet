@@ -7,10 +7,10 @@ import type {
   PendingLoginStatusResponse,
 } from "../types/auth";
 
-const LOGIN_INTENT_PATH = "/api/auth/login-intent";
-const LOGIN_STATUS_PATH = "/auth/status";
-const ME_PATH = "/auth/me";
-const LOGOUT_PATH = "/auth/logout";
+const LOGIN_INTENT_PATH = "/api/auth/init";
+const LOGIN_STATUS_PATH = "/api/auth/status";
+const ME_PATH = "/api/auth/me";
+const LOGOUT_PATH = "/api/auth/logout";
 
 function normalizeStatus(status: PendingLoginStatusResponse["status"]): NormalizedLoginStatusResponse["status"] {
   switch (status) {
@@ -32,7 +32,7 @@ export async function createLoginIntent(): Promise<LoginIntentResponse> {
   });
 }
 
-export async function getLoginStatus(token: string): Promise<NormalizedLoginStatusResponse> {
+export async function pollLoginStatus(token: string): Promise<NormalizedLoginStatusResponse> {
   const params = new URLSearchParams({ token });
   const raw = await apiFetch<PendingLoginStatusResponse>(`${LOGIN_STATUS_PATH}?${params.toString()}`);
   return {
@@ -42,7 +42,7 @@ export async function getLoginStatus(token: string): Promise<NormalizedLoginStat
   };
 }
 
-export async function getCurrentUser(): Promise<AuthMeResponse> {
+export async function fetchMe(): Promise<AuthMeResponse> {
   return apiFetch<AuthMeResponse>(ME_PATH);
 }
 

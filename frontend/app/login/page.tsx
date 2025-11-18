@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../../contexts/AuthContext";
-import { createLoginIntent, getLoginStatus } from "../../services/authApi";
+import { createLoginIntent, pollLoginStatus } from "../../services/authApi";
 import type { LoginIntentResponse, LoginStatus } from "../../types/auth";
 
 const POLL_INTERVAL_MS = 3000;
@@ -50,10 +50,9 @@ function buildQrUrl(loginUrl: string | null): string | null {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { setUser, refreshUser, isAuthenticated } = useAuth();
+  const { refreshUser, isAuthenticated } = useAuth();
   const [intent, setIntent] = useState<LoginIntentResponse | null>(null);
   const [status, setStatus] = useState<FlowState>("idle");
-  const [qrCode, setQrCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isGeneratingIntent, setIsGeneratingIntent] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
@@ -66,15 +65,17 @@ export default function LoginPage() {
 
   const startLoginIntent = useCallback(async () => {
     setError(null);
+    setIsPolling(false);
+    setIntent(null);
+    setStatus("pending");
     setIsGeneratingIntent(true);
     try {
       const nextIntent = await createLoginIntent();
       setIntent(nextIntent);
-      setStatus("pending");
-      setQrCode(buildQrUrl(nextIntent.login_url));
       setIsPolling(true);
     } catch (err) {
       console.error(err);
+      setStatus("idle");
       setError("Не удалось создать запрос на авторизацию. Попробуйте ещё раз.");
     } finally {
       setIsGeneratingIntent(false);
@@ -82,22 +83,19 @@ export default function LoginPage() {
   }, []);
 
   useEffect(() => {
-    startLoginIntent();
-  }, [startLoginIntent]);
-
-  useEffect(() => {
     if (!intent?.token || !isPolling) {
-      return;
+      return undefined;
     }
     let isCancelled = false;
     let timeout: ReturnType<typeof setTimeout> | undefined;
 
     const poll = async () => {
       try {
-        const result = await getLoginStatus(intent.token);
+        const result = await pollLoginStatus(intent.token);
         if (isCancelled) {
           return;
         }
+
         if (result.status === "pending") {
           timeout = setTimeout(poll, POLL_INTERVAL_MS);
           return;
@@ -107,12 +105,20 @@ export default function LoginPage() {
         setIsPolling(false);
 
         if (result.status === "success") {
-          if (result.admin) {
-            setUser(result.admin);
-          } else {
+          setError(null);
+          try {
             await refreshUser();
+          } catch (refreshError) {
+            console.error("Не удалось обновить профиль", refreshError);
           }
           router.replace("/");
+          return;
+        }
+
+        if (result.status === "rejected") {
+          setError("Аккаунт не был подтверждён. Попробуйте снова.");
+        } else if (result.status === "expired") {
+          setError("Срок действия токена истёк. Сгенерируйте новый QR-код.");
         }
       } catch (err) {
         if (isCancelled) {
@@ -132,7 +138,7 @@ export default function LoginPage() {
         clearTimeout(timeout);
       }
     };
-  }, [intent?.token, isPolling, refreshUser, router, setUser]);
+  }, [intent?.token, isPolling, refreshUser, router]);
 
   const expiresLabel = useMemo(() => {
     if (!intent?.expires_at) {
@@ -142,15 +148,30 @@ export default function LoginPage() {
     return `QR истекает ${date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`;
   }, [intent?.expires_at]);
 
+  const qrCode = useMemo(() => buildQrUrl(intent?.login_url ?? null), [intent?.login_url]);
+
   const descriptor = STATUS_MAP[status];
   const canRetry = status === "expired" || status === "rejected";
 
-  const openTelegramLink = useCallback(() => {
-    if (!intent?.login_url) {
+  const handlePrimaryAction = useCallback(async () => {
+    if (!intent) {
+      await startLoginIntent();
       return;
     }
-    window.open(intent.login_url, "_blank", "noopener,noreferrer");
-  }, [intent?.login_url]);
+
+    if (intent.login_url) {
+      window.open(intent.login_url, "_blank", "noopener,noreferrer");
+    }
+  }, [intent, startLoginIntent]);
+
+  const primaryButtonLabel = intent ? "Открыть в Telegram" : "Авторизоваться через Telegram";
+  const primaryButtonDisabled = isGeneratingIntent || status === "success";
+
+  const secondaryButtonLabel = canRetry
+    ? "Попробовать снова"
+    : intent
+      ? "Обновить QR-код"
+      : "Сгенерировать QR";
 
   return (
     <div className="login-page">
@@ -164,26 +185,19 @@ export default function LoginPage() {
             <button
               type="button"
               className="primary-button"
-              onClick={openTelegramLink}
-              disabled={!intent?.login_url || status === "success"}
+              onClick={handlePrimaryAction}
+              disabled={primaryButtonDisabled}
             >
-              Авторизоваться через Telegram
+              {primaryButtonLabel}
             </button>
-            {canRetry && (
-              <button type="button" className="secondary-button" onClick={startLoginIntent}>
-                Сгенерировать новый QR
-              </button>
-            )}
-            {!canRetry && (
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={startLoginIntent}
-                disabled={isGeneratingIntent || status === "pending"}
-              >
-                Обновить QR-код
-              </button>
-            )}
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={startLoginIntent}
+              disabled={isGeneratingIntent || status === "pending"}
+            >
+              {secondaryButtonLabel}
+            </button>
           </div>
           <div className="login-meta">
             <p className="status-label">{descriptor.title}</p>
@@ -212,7 +226,7 @@ export default function LoginPage() {
             />
           ) : (
             <div className="qr-placeholder">
-              <p>QR будет доступен, когда бот Telegram активен.</p>
+              <p>QR будет доступен после генерации токена авторизации.</p>
             </div>
           )}
         </div>

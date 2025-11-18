@@ -1,54 +1,53 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 import { useAuth } from "../contexts/AuthContext";
 
-const PUBLIC_ROUTES = ["/login"];
+const PUBLIC_ROUTES = new Set(["/login"]);
 
 export default function AppRouterGuard({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isLoading, logout, user } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
-  const pathname = usePathname() || "/";
-  const isPublicRoute = PUBLIC_ROUTES.includes(pathname);
+  const pathname = usePathname() ?? "/";
+  const isPublicRoute = PUBLIC_ROUTES.has(pathname);
 
   useEffect(() => {
     if (isLoading) {
       return;
     }
+
     if (!isAuthenticated && !isPublicRoute) {
       router.replace("/login");
-    } else if (isAuthenticated && pathname === "/login") {
+      return;
+    }
+
+    if (isAuthenticated && pathname === "/login") {
       router.replace("/");
     }
   }, [isAuthenticated, isLoading, isPublicRoute, pathname, router]);
 
-  const handleLogout = useCallback(async () => {
-    await logout();
-    router.replace("/login");
-  }, [logout, router]);
+  if (isLoading) {
+    return <GuardLoader message="Проверяем авторизацию…" />;
+  }
 
-  const showLoader = !isPublicRoute && (isLoading || !isAuthenticated);
+  if (!isAuthenticated && !isPublicRoute) {
+    return <GuardLoader message="Перенаправляем на страницу входа…" />;
+  }
 
+  if (isAuthenticated && pathname === "/login") {
+    return <GuardLoader message="Открываем панель…" />;
+  }
+
+  return <>{children}</>;
+}
+
+function GuardLoader({ message }: { message: string }) {
   return (
     <div className="app-shell">
-      {isAuthenticated && (
-        <header className="app-header">
-          <div className="app-header__info">
-            <p className="app-header__caption">Вы вошли как</p>
-            <div className="app-header__user">
-              <strong>{user?.full_name}</strong>
-              {user?.username && <span className="app-header__username">@{user.username}</span>}
-            </div>
-          </div>
-          <button type="button" className="link-button" onClick={handleLogout}>
-            Выйти
-          </button>
-        </header>
-      )}
       <main className="app-content">
-        {showLoader ? <p className="muted-text">Проверяем авторизацию…</p> : children}
+        <p className="muted-text">{message}</p>
       </main>
     </div>
   );
