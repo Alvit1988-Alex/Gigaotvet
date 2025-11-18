@@ -2,15 +2,17 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.bot.utils import send_telegram_message
 from app.core.db import get_db
+from app.core.ws_manager import WebSocketManager, get_ws_manager
 from app.models import Admin, Dialog, DialogStatus, Message, MessageRole
 from app.schemas.message import MessageOut, MessageSendRequest
 from app.services.audit import log_action
 from app.services.security import get_current_admin
+from app.services.ws_payloads import dialog_updated_payload, message_created_payload
 
 router = APIRouter(prefix="/messages", tags=["messages"])
 
@@ -27,6 +29,7 @@ async def send_message(
     payload: MessageSendRequest,
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
+    ws_manager: WebSocketManager = Depends(get_ws_manager),
 ):
     dialog = _ensure_dialog(db, payload.dialog_id)
 
@@ -58,6 +61,7 @@ async def send_message(
 
     db.commit()
     db.refresh(message)
+    db.refresh(dialog)
 
     log_action(
         db,
@@ -79,5 +83,8 @@ async def send_message(
         except Exception:
             # Не прерываем ответ оператору, если Telegram временно недоступен
             pass
+
+    await ws_manager.broadcast("messages", message_created_payload(message))
+    await ws_manager.broadcast("dialogs", dialog_updated_payload(dialog))
 
     return MessageOut.model_validate(message)

@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.db import get_db
+from app.core.ws_manager import WebSocketManager, get_ws_manager
 from app.models import Admin, Dialog, DialogStatus, Message
 from app.schemas.dialog import (
     DialogAssignRequest,
@@ -18,6 +19,7 @@ from app.schemas.dialog import (
 from app.schemas.message import MessageOut
 from app.services.audit import log_action
 from app.services.security import get_current_admin
+from app.services.ws_payloads import dialog_updated_payload
 
 LOCK_TIMEOUT = timedelta(minutes=5)
 
@@ -148,11 +150,12 @@ def get_dialog(
 
 
 @router.post("/{dialog_id}/assign", response_model=DialogDetail)
-def assign_dialog(
+async def assign_dialog(
     dialog_id: int,
     payload: DialogAssignRequest,
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
+    ws_manager: WebSocketManager = Depends(get_ws_manager),
 ) -> DialogDetail:
     """
     Назначить диалог на администратора.
@@ -201,14 +204,16 @@ def assign_dialog(
         commit=True,
     )
     db.refresh(dialog)
+    await ws_manager.broadcast("dialogs", dialog_updated_payload(dialog))
     return _dialog_to_detail(dialog)
 
 
 @router.post("/{dialog_id}/switch_auto", response_model=DialogSwitchAutoResponse)
-def switch_to_auto(
+async def switch_to_auto(
     dialog_id: int,
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
+    ws_manager: WebSocketManager = Depends(get_ws_manager),
 ) -> DialogSwitchAutoResponse:
     """
     Перевести диалог в автоматический режим.
@@ -244,4 +249,5 @@ def switch_to_auto(
         commit=True,
     )
 
+    await ws_manager.broadcast("dialogs", dialog_updated_payload(dialog))
     return DialogSwitchAutoResponse(dialog_id=dialog.id, status=dialog.status)

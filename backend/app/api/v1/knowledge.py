@@ -7,11 +7,13 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
+from app.core.ws_manager import WebSocketManager, get_ws_manager
 from app.models import Admin, KnowledgeFile
 from app.schemas.knowledge_file import KnowledgeFileOut
 from app.services.audit import log_action
 from app.services.knowledge_base import KnowledgeBaseService
 from app.services.security import get_current_admin
+from app.services.ws_payloads import knowledge_file_payload
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
@@ -37,6 +39,7 @@ async def upload_file(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     admin: Admin = Depends(get_current_admin),
+    ws_manager: WebSocketManager = Depends(get_ws_manager),
 ) -> KnowledgeFileOut:
     service = KnowledgeBaseService(db)
     knowledge_file = await service.create_from_upload(file)
@@ -47,6 +50,7 @@ async def upload_file(
         params={"file_id": knowledge_file.id, "filename": knowledge_file.filename_original},
         commit=True,
     )
+    await ws_manager.broadcast("system", knowledge_file_payload(knowledge_file, event="knowledge.uploaded"))
     return KnowledgeFileOut.model_validate(knowledge_file)
 
 
@@ -64,10 +68,11 @@ def download_file(
 
 
 @router.delete("/files/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_file(
+async def delete_file(
     file_id: int,
     db: Session = Depends(get_db),
     admin: Admin = Depends(get_current_admin),
+    ws_manager: WebSocketManager = Depends(get_ws_manager),
 ) -> None:
     file = _get_file(db, file_id)
     service = KnowledgeBaseService(db)
@@ -79,3 +84,4 @@ def delete_file(
         params={"file_id": file_id, "filename": file.filename_original},
         commit=True,
     )
+    await ws_manager.broadcast("system", knowledge_file_payload(file, event="knowledge.deleted"))

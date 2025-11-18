@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, Query, Request, status
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
@@ -53,9 +53,39 @@ def extract_token_from_request(request: Request, *, cookie_name: str | None = AC
     return None
 
 
+def access_token_dependency(
+    request: Request,
+    token: str | None = Query(default=None),
+) -> str:
+    token_value = token or extract_token_from_request(request)
+    if not token_value:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    return token_value
+
+
+def verify_token(
+    token: str,
+    *,
+    db: Session,
+    require_active: bool = True,
+) -> Admin:
+    payload = decode_token(token)
+    if payload.get("type") != "access":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
+
+    admin_id = payload.get("sub")
+    admin = db.query(Admin).filter(Admin.id == int(admin_id)).first() if admin_id else None
+    if not admin:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Admin not found")
+    if require_active and not admin.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin disabled")
+    return admin
+
+
 def get_current_admin(
     request: Request,
     db: Session = Depends(get_db),
+    token: str = Depends(access_token_dependency),
     *,
     require_active: bool = True,
 ) -> Admin:
@@ -65,20 +95,7 @@ def get_current_admin(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin disabled")
         return admin
 
-    token = extract_token_from_request(request)
-    if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-
-    payload = decode_token(token)
-    if payload.get("type") != "access":
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
-
-    admin_id = payload.get("sub")
-    admin = db.query(Admin).filter(Admin.id == int(admin_id)).first()
-    if not admin:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Admin not found")
-    if require_active and not admin.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin disabled")
+    admin = verify_token(token, db=db, require_active=require_active)
     request.state.admin = admin
     return admin
 
