@@ -18,4 +18,7 @@ node_modules/
 frontend/.next/
 frontend/out/
 
+# Knowledge base storage
+backend/app_data/
+
 *.bat

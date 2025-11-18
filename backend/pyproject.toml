@@ -15,6 +15,12 @@ dependencies = [
     "passlib[bcrypt]",
     "python-jose[cryptography]",
     "httpx",
+    "python-multipart",
+    "python-docx",
+    "pdfplumber",
+    "textract",
+    "pytest",
+    "pytest-asyncio",
 ]
 
 [tool.setuptools]

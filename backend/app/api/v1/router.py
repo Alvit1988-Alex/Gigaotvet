@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1 import admins, auth, dialogs, messages
+from app.api.v1 import admins, ai_instructions, auth, dialogs, knowledge, messages
 
 router = APIRouter()
 
@@ -8,6 +8,8 @@ router.include_router(auth.router)
 router.include_router(dialogs.router)
 router.include_router(messages.router)
 router.include_router(admins.router)
+router.include_router(knowledge.router)
+router.include_router(ai_instructions.router)
 
 
 @router.get("/ping", tags=["system"])
