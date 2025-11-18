@@ -31,7 +31,19 @@ class Settings(BaseSettings):
     GIGACHAT_CLIENT_ID: str | None = None
     GIGACHAT_CLIENT_SECRET: str | None = None
     GIGACHAT_API_URL: str | None = None
+    GIGACHAT_OAUTH_URL: str | None = None
+    GIGACHAT_SSL_VERIFY: bool = False
     GIGACHAT_SCOPE: str = "GIGACHAT_API_PERS"
+
+    KNOWLEDGE_FILES_DIR: str = "app_data/knowledge_files"
+    KNOWLEDGE_MAX_FILE_SIZE_MB: int = 2
+    KNOWLEDGE_TOTAL_STORAGE_MB: int = 10
+
+    RAG_MIN_CHUNK_SIZE: int = 500
+    RAG_MAX_CHUNK_SIZE: int = 1500
+    RAG_MIN_RELEVANCE: float = 0.3
+    RAG_OPERATOR_HIGH_CONFIDENCE: float = 0.5
+    RAG_HISTORY_MESSAGE_LIMIT: int = 15
 
     class Config:
         env_file = ".env"
