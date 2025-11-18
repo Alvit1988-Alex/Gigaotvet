@@ -1,6 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import {
+  deleteKnowledgeFile,
+  fetchKnowledgeFiles,
+  uploadKnowledgeFile,
+  type KnowledgeFile,
+} from "../../../services/knowledgeApi";
 
 type NotificationChannel = "email" | "telegram" | "webhook";
 
@@ -18,9 +24,137 @@ export default function SettingsView() {
   });
   const [autoAssign, setAutoAssign] = useState(true);
   const [slaMinutes, setSlaMinutes] = useState(15);
+  const [files, setFiles] = useState<KnowledgeFile[]>([]);
+  const [filesError, setFilesError] = useState<string | null>(null);
+  const [isFilesLoading, setIsFilesLoading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const loadFiles = useCallback(async () => {
+    setIsFilesLoading(true);
+    setFilesError(null);
+    try {
+      const knowledgeFiles = await fetchKnowledgeFiles();
+      setFiles(knowledgeFiles);
+    } catch (error) {
+      console.error("Failed to fetch knowledge files", error);
+      setFilesError("Не удалось загрузить список файлов. Попробуйте позже.");
+    } finally {
+      setIsFilesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadFiles();
+  }, [loadFiles]);
+
+  const formatFileSize = (sizeBytes: number) => {
+    const formatter = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 });
+    if (sizeBytes >= 1024 * 1024) {
+      return `${formatter.format(sizeBytes / (1024 * 1024))} МБ`;
+    }
+    if (sizeBytes >= 1024) {
+      return `${formatter.format(sizeBytes / 1024)} КБ`;
+    }
+    return `${sizeBytes} Б`;
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile || isUploading) {
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadStatus("uploading");
+    setUploadError(null);
+    try {
+      await uploadKnowledgeFile(selectedFile);
+      setUploadStatus("success");
+      setSelectedFile(null);
+      await loadFiles();
+    } catch (error) {
+      console.error("Failed to upload knowledge file", error);
+      setUploadError("Ошибка при загрузке файла. Попробуйте снова.");
+      setUploadStatus("error");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDelete = async (fileId: number) => {
+    try {
+      await deleteKnowledgeFile(fileId);
+      await loadFiles();
+    } catch (error) {
+      console.error("Failed to delete knowledge file", error);
+      setFilesError("Не удалось удалить файл. Попробуйте позже.");
+    }
+  };
+
+  const handleDownload = (file: KnowledgeFile) => {
+    window.open(`/api/knowledge/files/${file.id}/download`, "_blank");
+  };
 
   return (
     <div className="settings-view">
+      <section className="settings-card">
+        <header>
+          <h3>База знаний</h3>
+          <p>Загружайте документы и обновляйте базу для ассистента.</p>
+        </header>
+
+        <div className="field">
+          <span>Файл</span>
+          <input
+            type="file"
+            onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+            disabled={isUploading}
+          />
+        </div>
+        <button type="button" className="primary-button" disabled={!selectedFile || isUploading} onClick={handleUpload}>
+          {isUploading ? "Загружаем..." : "Загрузить"}
+        </button>
+        {uploadStatus === "uploading" && <p className="text-muted">Файл отправляется, подождите...</p>}
+        {uploadStatus === "success" && <p className="text-muted">Файл успешно загружен.</p>}
+        {uploadStatus === "error" && uploadError && <p className="text-muted">{uploadError}</p>}
+
+        <div className="knowledge-files">
+          {isFilesLoading && <p className="text-muted">Загружаем список файлов...</p>}
+          {!isFilesLoading && filesError && <p className="text-muted">{filesError}</p>}
+          {!isFilesLoading && !filesError && files.length === 0 && (
+            <p className="text-muted">Файлы ещё не загружены.</p>
+          )}
+          {!isFilesLoading && !filesError && files.length > 0 && (
+            <ul>
+              {files.map((file) => (
+                <li key={file.id} className="knowledge-file-item">
+                  <div>
+                    <strong>{file.filename_original}</strong>
+                    <div className="text-muted">
+                      {formatFileSize(file.size_bytes)} · {file.total_chunks} чанков ·{" "}
+                      {new Date(file.created_at).toLocaleString("ru-RU", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
+                    </div>
+                  </div>
+                  <div className="knowledge-file-actions">
+                    <button type="button" className="ghost-button" onClick={() => handleDownload(file)}>
+                      Скачать
+                    </button>
+                    <button type="button" className="ghost-button" onClick={() => handleDelete(file.id)}>
+                      Удалить
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+
       <section className="settings-card">
         <header>
           <h3>Уведомления</h3>
@@ -56,7 +190,13 @@ export default function SettingsView() {
         </label>
         <label className="field">
           <span>Максимальное время SLA, мин</span>
-          <input type="number" min={5} max={60} value={slaMinutes} onChange={(event) => setSlaMinutes(Number(event.target.value))} />
+          <input
+            type="number"
+            min={5}
+            max={60}
+            value={slaMinutes}
+            onChange={(event) => setSlaMinutes(Number(event.target.value))}
+          />
         </label>
         <button type="button" className="primary-button">
           Сохранить
