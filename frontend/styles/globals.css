@@ -198,6 +198,39 @@ a {
   border-bottom: none;
 }
 
+.toast-container {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 1000;
+}
+
+.toast {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  padding: 16px 20px;
+  box-shadow: var(--shadow-card);
+  min-width: 240px;
+  color: var(--body-color);
+  font-size: 0.95rem;
+}
+
+@media (max-width: 768px) {
+  .toast-container {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+  }
+
+  .toast {
+    width: 100%;
+  }
+}
+
 .team-list span {
   color: var(--color-muted);
   font-size: 0.9rem;
