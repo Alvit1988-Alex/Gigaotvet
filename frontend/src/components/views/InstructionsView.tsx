@@ -43,7 +43,7 @@ const SOP_TIPS = [
 ];
 
 export default function InstructionsView() {
-  const wsClient = useWSClient();
+  const { subscribe } = useWSClient();
   const isMountedRef = useRef(true);
   const [instructionsText, setInstructionsText] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -123,11 +123,11 @@ export default function InstructionsView() {
   );
 
   useEffect(() => {
-    const unsubscribe = wsClient.subscribe("events/system", handleSystemEvent);
+    const unsubscribe = subscribe("events/system", handleSystemEvent);
     return () => {
       unsubscribe();
     };
-  }, [handleSystemEvent, wsClient]);
+  }, [handleSystemEvent, subscribe]);
 
   const handleSave = async () => {
     setIsSaving(true);

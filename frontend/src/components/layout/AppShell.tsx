@@ -1,12 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+
+import { useAuth } from "../../../contexts/AuthContext";
+import { WSClientProvider, useWSClient } from "../../../contexts/WSClientContext";
 import DialogsView from "../views/DialogsView";
+import InstructionsView from "../views/InstructionsView";
 import SearchView from "../views/SearchView";
 import SettingsView from "../views/SettingsView";
-import InstructionsView from "../views/InstructionsView";
 import StatsView from "../views/StatsView";
-import { useAuth } from "../../../contexts/AuthContext";
+import { WSClient, type ConnectionStatus } from "../../services/wsClient";
 
 type Role = "admin" | "superadmin";
 type ViewId = "dialogs" | "search" | "settings" | "instructions" | "stats";
@@ -62,15 +65,37 @@ const ROLE_LABEL: Record<Role, string> = {
   superadmin: "Суперадминистратор",
 };
 
-export default function AppShell() {
-  const { logout } = useAuth();
+const CONNECTION_STATUS_LABEL: Record<ConnectionStatus, string> = {
+  connected: "Онлайн",
+  idle: "Ожидание",
+  connecting: "Подключаемся",
+  reconnecting: "Восстанавливаем",
+  disconnected: "Нет связи",
+  error: "Ошибка подключения",
+};
+
+const CONNECTION_STATUS_CLASS: Record<ConnectionStatus, string> = {
+  connected: "connection-good",
+  idle: "connection-idle",
+  connecting: "connection-progress",
+  reconnecting: "connection-progress",
+  disconnected: "connection-bad",
+  error: "connection-bad",
+};
+
+type AppShellContentProps = {
+  onLogout: () => void;
+};
+
+function AppShellContent({ onLogout }: AppShellContentProps) {
+  const { connectionStatus } = useWSClient();
   const [role, setRole] = useState<Role>("admin");
   const [activeView, setActiveView] = useState<ViewId>("dialogs");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const handleLogout = useCallback(() => {
-    void logout();
-  }, [logout]);
+    onLogout();
+  }, [onLogout]);
 
   const allowedViews = useMemo(
     () => VIEW_CONFIG.filter((view) => view.roles.includes(role)),
@@ -84,6 +109,9 @@ export default function AppShell() {
   }, [activeView, allowedViews]);
 
   const currentViewDescription = allowedViews.find((view) => view.id === activeView)?.description;
+
+  const connectionLabel = CONNECTION_STATUS_LABEL[connectionStatus];
+  const connectionClass = CONNECTION_STATUS_CLASS[connectionStatus];
 
   return (
     <div className={`app-shell role-${role}`}>
@@ -109,6 +137,10 @@ export default function AppShell() {
                 {label}
               </button>
             ))}
+          </div>
+          <div className={`connection-indicator ${connectionClass}`} role="status" aria-live="polite">
+            <span className="indicator-dot" aria-hidden="true" />
+            {connectionLabel}
           </div>
           <div className="header-profile">
             <div>
@@ -198,6 +230,47 @@ export default function AppShell() {
         </main>
       </div>
     </div>
+  );
+}
+
+export default function AppShell() {
+  const { user, refreshUser, logout } = useAuth();
+  const [client, setClient] = useState<WSClient | null>(null);
+
+  useEffect(() => {
+    const instance = new WSClient({ auth: { refreshUser, logout } });
+    setClient(instance);
+    return () => {
+      instance.closeAll();
+    };
+  }, [refreshUser, logout]);
+
+  useEffect(() => {
+    if (!client) {
+      return;
+    }
+    if (!user) {
+      client.handleLogout();
+    }
+  }, [user, client]);
+
+  const handleLogout = useCallback(async () => {
+    client?.handleLogout();
+    await logout();
+  }, [client, logout]);
+
+  if (!client) {
+    return (
+      <div className="app-shell ws-loading-state">
+        <div className="ws-loading-message">Готовим подключение к серверу...</div>
+      </div>
+    );
+  }
+
+  return (
+    <WSClientProvider client={client}>
+      <AppShellContent onLogout={handleLogout} />
+    </WSClientProvider>
   );
 }
 
