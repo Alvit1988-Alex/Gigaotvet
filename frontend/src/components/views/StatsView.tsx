@@ -1,8 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Period = "day" | "week" | "month";
+
+type MetricCard = {
+  label: string;
+  value: string;
+  caption: string;
+};
 
 const PERFORMANCE = [
   { queue: "B2B", sla: "94%", aht: "6 мин", satisfaction: "4.8" },
@@ -17,33 +23,84 @@ const GRAPH_DATA: Record<Period, number[]> = {
 };
 
 export default function StatsView() {
+  const [metrics, setMetrics] = useState<MetricCard[] | null>(null);
+  const [performanceData, setPerformanceData] = useState<typeof PERFORMANCE>([]);
+  const [chartData, setChartData] = useState<Record<Period, number[]>>({
+    day: [],
+    week: [],
+    month: [],
+  });
   const [period, setPeriod] = useState<Period>("day");
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const dataset = useMemo(() => GRAPH_DATA[period], [period]);
+  useEffect(() => {
+    setIsLoading(true);
+    setError(null);
+
+    async function loadStats() {
+      try {
+        // TODO: Replace with analytics overview request to /api/stats/overview
+        const overviewMetrics: MetricCard[] = [
+          { label: "Диалогов сегодня", value: "186", caption: "+14% к прошлой неделе" },
+          { label: "Среднее время ответа", value: "3 мин 42 сек", caption: "SLA 90%" },
+          { label: "Эскалации", value: "12", caption: "4 в работе" },
+          { label: "Операторы онлайн", value: "27", caption: "+5 в резерве" },
+        ];
+
+        // TODO: Replace with SLA dataset from /api/stats/sla
+        setMetrics(overviewMetrics);
+        setPerformanceData(PERFORMANCE);
+        setChartData(GRAPH_DATA);
+      } catch (statsError) {
+        setError(statsError instanceof Error ? statsError.message : "Не удалось загрузить статистику");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    void loadStats();
+  }, []);
+
+  const dataset = useMemo(() => chartData[period] ?? [], [chartData, period]);
+  const hasData = Boolean(metrics?.length && performanceData.length && dataset.length);
+
+  if (isLoading) {
+    return (
+      <div className="stats-view">
+        <p className="placeholder">Загрузка статистики...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="stats-view">
+        <p className="placeholder" role="alert">
+          {error}
+        </p>
+      </div>
+    );
+  }
+
+  if (!hasData) {
+    return (
+      <div className="stats-view">
+        <p className="placeholder">Нет данных для отображения</p>
+      </div>
+    );
+  }
 
   return (
     <div className="stats-view">
       <section className="stats-cards">
-        <article>
-          <span>Диалогов сегодня</span>
-          <strong>186</strong>
-          <small>+14% к прошлой неделе</small>
-        </article>
-        <article>
-          <span>Среднее время ответа</span>
-          <strong>3 мин 42 сек</strong>
-          <small>SLA 90%</small>
-        </article>
-        <article>
-          <span>Эскалации</span>
-          <strong>12</strong>
-          <small>4 в работе</small>
-        </article>
-        <article>
-          <span>Операторы онлайн</span>
-          <strong>27</strong>
-          <small>+5 в резерве</small>
-        </article>
+        {metrics?.map((metric) => (
+          <article key={metric.label}>
+            <span>{metric.label}</span>
+            <strong>{metric.value}</strong>
+            <small>{metric.caption}</small>
+          </article>
+        ))}
       </section>
 
       <section className="stats-chart">
@@ -88,7 +145,7 @@ export default function StatsView() {
             </tr>
           </thead>
           <tbody>
-            {PERFORMANCE.map((row) => (
+            {performanceData.map((row) => (
               <tr key={row.queue}>
                 <td>{row.queue}</td>
                 <td>{row.sla}</td>
