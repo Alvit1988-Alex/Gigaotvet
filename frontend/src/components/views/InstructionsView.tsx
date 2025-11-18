@@ -1,10 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   fetchCurrentInstructions,
   updateInstructions,
 } from "../../services/aiInstructionsApi";
+import { useWSClient } from "../../../contexts/WSClientContext";
+
+type SystemEventPayload = {
+  event?: string;
+};
+
+function getSystemEventName(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const eventName = (payload as SystemEventPayload).event;
+  return typeof eventName === "string" ? eventName : null;
+}
 
 const SOP_TIPS = [
   {
@@ -30,38 +43,52 @@ const SOP_TIPS = [
 ];
 
 export default function InstructionsView() {
+  const wsClient = useWSClient();
+  const isMountedRef = useRef(true);
   const [instructionsText, setInstructionsText] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    let isMounted = true;
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
-    async function loadInstructions() {
-      setIsLoading(true);
-      setError(null);
+  const loadInstructions = useCallback(async () => {
+    if (!isMountedRef.current) {
+      return false;
+    }
+    setIsLoading(true);
+    setError(null);
 
-      try {
-        const instructions = await fetchCurrentInstructions();
-        if (!isMounted) return;
-        setInstructionsText(instructions.text ?? "");
-      } catch (err) {
-        if (!isMounted) return;
-        setError("Не удалось загрузить инструкции. Попробуйте ещё раз.");
-      } finally {
-        if (!isMounted) return;
+    try {
+      const instructions = await fetchCurrentInstructions();
+      if (!isMountedRef.current) {
+        return false;
+      }
+      setInstructionsText(instructions.text ?? "");
+      return true;
+    } catch (err) {
+      if (!isMountedRef.current) {
+        return false;
+      }
+      setError("Не удалось загрузить инструкции. Попробуйте ещё раз.");
+      return false;
+    } finally {
+      if (isMountedRef.current) {
         setIsLoading(false);
       }
     }
-
-    loadInstructions();
-
-    return () => {
-      isMounted = false;
-    };
   }, []);
+
+  useEffect(() => {
+    loadInstructions();
+  }, [loadInstructions]);
 
   useEffect(() => {
     if (!showSuccess) {
@@ -71,6 +98,36 @@ export default function InstructionsView() {
     const timeout = setTimeout(() => setShowSuccess(false), 2500);
     return () => clearTimeout(timeout);
   }, [showSuccess]);
+
+  useEffect(() => {
+    if (!refreshMessage) {
+      return undefined;
+    }
+    const timeoutId = window.setTimeout(() => setRefreshMessage(null), 4000);
+    return () => window.clearTimeout(timeoutId);
+  }, [refreshMessage]);
+
+  const handleSystemEvent = useCallback(
+    (payload: unknown) => {
+      const eventName = getSystemEventName(payload);
+      if (eventName !== "instructions_updated") {
+        return;
+      }
+      loadInstructions().then((success) => {
+        if (success) {
+          setRefreshMessage("Инструкции были обновлены другим администратором.");
+        }
+      });
+    },
+    [loadInstructions],
+  );
+
+  useEffect(() => {
+    const unsubscribe = wsClient.subscribe("events/system", handleSystemEvent);
+    return () => {
+      unsubscribe();
+    };
+  }, [handleSystemEvent, wsClient]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -101,6 +158,12 @@ export default function InstructionsView() {
             {isLoading ? "Загрузка..." : "Редактируйте текст и сохраняйте"}
           </span>
         </div>
+
+        {refreshMessage && (
+          <div className="refresh-banner" role="status">
+            {refreshMessage}
+          </div>
+        )}
 
         {error && <p className="error-message">{error}</p>}
 

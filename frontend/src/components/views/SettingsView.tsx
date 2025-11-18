@@ -7,6 +7,19 @@ import {
   uploadKnowledgeFile,
   type KnowledgeFile,
 } from "../../../services/knowledgeApi";
+import { useWSClient } from "../../../contexts/WSClientContext";
+
+type SystemEventPayload = {
+  event?: string;
+};
+
+function getSystemEventName(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const eventName = (payload as SystemEventPayload).event;
+  return typeof eventName === "string" ? eventName : null;
+}
 
 type NotificationChannel = "email" | "telegram" | "webhook";
 
@@ -17,6 +30,7 @@ const CHANNEL_LABEL: Record<NotificationChannel, string> = {
 };
 
 export default function SettingsView() {
+  const wsClient = useWSClient();
   const [notifications, setNotifications] = useState<Record<NotificationChannel, boolean>>({
     email: true,
     telegram: true,
@@ -31,6 +45,7 @@ export default function SettingsView() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
 
   const loadFiles = useCallback(async () => {
     setIsFilesLoading(true);
@@ -38,9 +53,11 @@ export default function SettingsView() {
     try {
       const knowledgeFiles = await fetchKnowledgeFiles();
       setFiles(knowledgeFiles);
+      return true;
     } catch (error) {
       console.error("Failed to fetch knowledge files", error);
       setFilesError("Не удалось загрузить список файлов. Попробуйте позже.");
+      return false;
     } finally {
       setIsFilesLoading(false);
     }
@@ -49,6 +66,36 @@ export default function SettingsView() {
   useEffect(() => {
     loadFiles();
   }, [loadFiles]);
+
+  useEffect(() => {
+    if (!refreshMessage) {
+      return undefined;
+    }
+    const timeoutId = window.setTimeout(() => setRefreshMessage(null), 4000);
+    return () => window.clearTimeout(timeoutId);
+  }, [refreshMessage]);
+
+  const handleSystemEvent = useCallback(
+    (payload: unknown) => {
+      const eventName = getSystemEventName(payload);
+      if (eventName !== "knowledge_updated") {
+        return;
+      }
+      loadFiles().then((success) => {
+        if (success) {
+          setRefreshMessage("Список файлов обновлён другим администратором.");
+        }
+      });
+    },
+    [loadFiles],
+  );
+
+  useEffect(() => {
+    const unsubscribe = wsClient.subscribe("events/system", handleSystemEvent);
+    return () => {
+      unsubscribe();
+    };
+  }, [handleSystemEvent, wsClient]);
 
   const formatFileSize = (sizeBytes: number) => {
     const formatter = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 });
@@ -104,6 +151,12 @@ export default function SettingsView() {
           <h3>База знаний</h3>
           <p>Загружайте документы и обновляйте базу для ассистента.</p>
         </header>
+
+        {refreshMessage && (
+          <div className="refresh-banner" role="status">
+            {refreshMessage}
+          </div>
+        )}
 
         <div className="field">
           <span>Файл</span>
