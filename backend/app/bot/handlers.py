@@ -6,10 +6,12 @@ from sqlalchemy.orm import Session
 
 from app.bot.utils import send_telegram_message
 from app.core.config import settings
+from app.core.ws_manager import get_ws_manager
 from app.models import Dialog, DialogStatus, Message, MessageRole
 from app.services.ai_responder import AiReplyResult, FALLBACK_TEXT, generate_ai_reply
 from app.services.audit import log_action
 from app.services.rag_service import RAGService
+from app.services.ws_payloads import dialog_updated_payload, message_created_payload
 
 OPERATOR_KEYWORDS = [
     "оператор",
@@ -68,6 +70,7 @@ async def handle_update(update: dict, db: Session) -> None:
 
     dialog = _find_or_create_dialog(db, telegram_user_id)
     now = datetime.now(timezone.utc)
+    ws_manager = get_ws_manager()
 
     content = message.get("text", "")
     previous_status = dialog.status
@@ -79,6 +82,7 @@ async def handle_update(update: dict, db: Session) -> None:
         content=content,
     )
     db.add(db_message)
+    db.flush()
 
     dialog.last_message_at = now
     dialog.unread_messages_count = (dialog.unread_messages_count or 0) + 1
@@ -111,6 +115,8 @@ async def handle_update(update: dict, db: Session) -> None:
         else:
             ai_result = await generate_ai_reply(db, dialog=dialog, user_text=content)
 
+    events: list[tuple[str, dict]] = [("messages", message_created_payload(db_message))]
+
     if ai_result:
         metadata = None
         if ai_result.matches:
@@ -141,6 +147,7 @@ async def handle_update(update: dict, db: Session) -> None:
                 dialog.unread_messages_count = 0
 
         db.flush()
+        events.append(("messages", message_created_payload(ai_message)))
 
         log_action(
             db,
@@ -167,3 +174,7 @@ async def handle_update(update: dict, db: Session) -> None:
         )
 
     db.commit()
+
+    for channel, payload in events:
+        await ws_manager.broadcast(channel, payload)
+    await ws_manager.broadcast("dialogs", dialog_updated_payload(dialog))
