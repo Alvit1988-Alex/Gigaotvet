@@ -34,7 +34,7 @@ function readCookie(name: string): string | null {
 }
 
 function normalizeChannel(channel: string): string {
-  return channel.replace(/^\/+/, "");
+  return channel.replace(/^\/+/, "").replace(/\/+$/, "");
 }
 
 function isUnauthorizedClose(event: CloseEvent): boolean {
@@ -163,7 +163,8 @@ export class WSClient {
   private buildUrl(channel: string): string {
     const fallback = isBrowser ? window.location.origin : "http://localhost";
     const base = (this.baseUrl || fallback).replace(/\/$/, "");
-    const url = new URL(`/ws/${normalizeChannel(channel)}`, base || undefined);
+    const normalizedChannel = normalizeChannel(channel);
+    const url = new URL(`/api/events/${normalizedChannel}`, base || undefined);
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
     const token = readCookie(ACCESS_COOKIE_NAME);
     if (token) {
