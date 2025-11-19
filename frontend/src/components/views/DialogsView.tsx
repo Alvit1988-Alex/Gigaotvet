@@ -561,9 +561,9 @@ export default function DialogsView() {
   }, []);
 
   useEffect(() => {
-    const unsubscribeMessages = subscribe("events/messages", handleMessageEvent);
-    const unsubscribeDialogs = subscribe("events/dialogs", handleDialogEvent);
-    const unsubscribeOperators = subscribe("events/operators", handleOperatorEvent);
+    const unsubscribeMessages = subscribe("messages", handleMessageEvent);
+    const unsubscribeDialogs = subscribe("dialogs", handleDialogEvent);
+    const unsubscribeOperators = subscribe("operators", handleOperatorEvent);
     return () => {
       unsubscribeMessages();
       unsubscribeDialogs();

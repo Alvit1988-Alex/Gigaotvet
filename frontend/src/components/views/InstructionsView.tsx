@@ -123,7 +123,7 @@ export default function InstructionsView() {
   );
 
   useEffect(() => {
-    const unsubscribe = subscribe("events/system", handleSystemEvent);
+    const unsubscribe = subscribe("system", handleSystemEvent);
     return () => {
       unsubscribe();
     };
