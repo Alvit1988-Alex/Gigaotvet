@@ -10,12 +10,14 @@ type MetricCard = {
   caption: string;
 };
 
+// TODO: replace mock stats with real API once /api/stats endpoints are available.
 const PERFORMANCE = [
   { queue: "B2B", sla: "94%", aht: "6 мин", satisfaction: "4.8" },
   { queue: "Retail", sla: "88%", aht: "4 мин", satisfaction: "4.5" },
   { queue: "Support", sla: "91%", aht: "7 мин", satisfaction: "4.6" },
 ];
 
+// TODO: replace mock stats with real API once /api/stats endpoints are available.
 const GRAPH_DATA: Record<Period, number[]> = {
   day: [82, 90, 95, 93, 97, 92, 94],
   week: [71, 82, 79, 85, 88, 90, 92],
